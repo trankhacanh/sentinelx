@@ -43,3 +43,14 @@ management:
   endpoint:
     health:
       show-details: never
+
+sentinelx:
+  security:
+    jwt:
+      secret: ${JWT_SECRET}          # không có default: thiếu là app không khởi động
+      expiration: ${JWT_EXPIRATION:60m}
+      issuer: sentinelx
+  bootstrap-admin:
+    username: ${BOOTSTRAP_ADMIN_USERNAME:}
+    email: ${BOOTSTRAP_ADMIN_EMAIL:}
+    password: ${BOOTSTRAP_ADMIN_PASSWORD:}
