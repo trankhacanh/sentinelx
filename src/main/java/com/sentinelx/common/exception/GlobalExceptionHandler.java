@@ -19,6 +19,9 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.AuthenticationException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -93,7 +96,31 @@ public class GlobalExceptionHandler {
                 "Content type not supported", req, null);
     }
 
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex,
+                                                              HttpServletRequest req) {
+        return build(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", ex.getMessage(), req, null);
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthentication(AuthenticationException ex,
+                                                              HttpServletRequest req) {
+        return build(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Authentication failed", req, null);
+    }
+
+    /**
+     * QUAN TRỌNG: @PreAuthorize ném AccessDeniedException từ BÊN TRONG luồng controller,
+     * nên @RestControllerAdvice bắt nó trước Security filter chain. Nếu thiếu handler này,
+     * catch-all Exception.class sẽ biến lỗi 403 thành 500.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex,
+                                                            HttpServletRequest req) {
+        return build(HttpStatus.FORBIDDEN, "FORBIDDEN",
+                "You do not have permission to perform this action", req, null);
+    }
     /** Lưới an toàn cuối cùng: log đầy đủ ở server, client chỉ nhận thông báo chung. */
+    
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex, HttpServletRequest req) {
         log.error("Unhandled exception on {} {}", req.getMethod(), req.getRequestURI(), ex);
