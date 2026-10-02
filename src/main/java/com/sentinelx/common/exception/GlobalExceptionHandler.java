@@ -22,6 +22,10 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
+import com.sentinelx.common.exception.BadRequestException;
+import org.springframework.validation.BindException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -120,6 +124,42 @@ public class GlobalExceptionHandler {
                 "You do not have permission to perform this action", req, null);
     }
     /** Lưới an toàn cuối cùng: log đầy đủ ở server, client chỉ nhận thông báo chung. */
+    
+        @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException ex, HttpServletRequest req) {
+        return build(HttpStatus.BAD_REQUEST, "BAD_REQUEST", ex.getMessage(), req, null);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResponse> handleMissingParam(MissingServletRequestParameterException ex,
+                                                            HttpServletRequest req) {
+        return build(HttpStatus.BAD_REQUEST, "MISSING_PARAMETER",
+                "Required parameter '" + ex.getParameterName() + "' is missing", req, null);
+    }
+
+    /**
+     * Spring 6.1+ ném lỗi này khi một @RequestParam có annotation ràng buộc (như @Size) vi phạm.
+     * Không có handler thì lỗi rơi xuống catch-all và biến thành 500.
+     */
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ErrorResponse> handleMethodValidation(HandlerMethodValidationException ex,
+                                                                HttpServletRequest req) {
+        List<FieldViolation> details = ex.getParameterValidationResults().stream()
+                .flatMap(result -> result.getResolvableErrors().stream()
+                        .map(error -> new FieldViolation(
+                                result.getMethodParameter().getParameterName(), error.getDefaultMessage())))
+                .toList();
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Invalid request parameters", req, details);
+    }
+
+    /** Phòng hờ: lỗi bind query string (ví dụ severity=ABC, from=không-phải-ngày). */
+    @ExceptionHandler(BindException.class)
+    public ResponseEntity<ErrorResponse> handleBind(BindException ex, HttpServletRequest req) {
+        List<FieldViolation> details = ex.getBindingResult().getFieldErrors().stream()
+                .map(fe -> new FieldViolation(fe.getField(), "Invalid value"))
+                .toList();
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Invalid request parameters", req, details);
+    }
     
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex, HttpServletRequest req) {
