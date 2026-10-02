@@ -54,3 +54,6 @@ sentinelx:
     username: ${BOOTSTRAP_ADMIN_USERNAME:}
     email: ${BOOTSTRAP_ADMIN_EMAIL:}
     password: ${BOOTSTRAP_ADMIN_PASSWORD:}
+  events:
+    max-future-skew: 5m
+    max-payload-bytes: 8192
