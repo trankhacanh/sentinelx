@@ -1,9 +1,14 @@
 package com.sentinelx.detection.repository;
 
 import com.sentinelx.detection.entity.Threat;
+import com.sentinelx.detection.entity.ThreatType;
+import java.time.Instant;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-/** Thêm query method khi Bước 4.2/4.3 cần (ví dụ đếm threat theo IP). */
 public interface ThreatRepository extends JpaRepository<Threat, UUID> {
+
+    /** Dùng để chặn tạo threat trùng lặp trong cùng một cửa sổ đang diễn ra (xem quyết định 2d). */
+    boolean existsByThreatTypeAndSourceIpAndDetectedAtBetween(
+            ThreatType threatType, String sourceIp, Instant from, Instant to);
 }

@@ -23,6 +23,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.sentinelx.detection.engine.DetectionRuleEngine;
+
 
 @Service
 public class SecurityEventService {
@@ -34,17 +36,19 @@ public class SecurityEventService {
     private final Clock clock;
     private final EventIngestionProperties properties;
 
+    private final DetectionRuleEngine detectionRuleEngine;
+
     public SecurityEventService(SecurityEventRepository repository, ObjectMapper objectMapper,
-                                Clock clock, EventIngestionProperties properties) {
+                                Clock clock, EventIngestionProperties properties, DetectionRuleEngine detectionRuleEngine) {
         this.repository = repository;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.properties = properties;
+        this.detectionRuleEngine = detectionRuleEngine;
     }
 
-    @Transactional
+        @Transactional
     public SecurityEventResponse ingest(CreateSecurityEventRequest request) {
-        // Detection window dựa trên timestamp: chặn timestamp ở tương lai xa để không bị "đầu độc" cửa sổ.
         Instant latestAllowed = clock.instant().plus(properties.maxFutureSkew());
         if (request.timestamp().isAfter(latestAllowed)) {
             throw new BadRequestException("Event timestamp is too far in the future");
@@ -61,8 +65,15 @@ public class SecurityEventService {
                 request.severity(),
                 request.payload());
 
-        // Phase 8 sẽ publish event sang RabbitMQ SAU khi transaction này commit.
-        return SecurityEventResponse.from(repository.save(event));
+        SecurityEvent saved = repository.save(event);
+
+        // evaluate() giờ chạy CÙNG transaction với insert này (xem DetectionRuleEngine).
+        // Nếu transaction rollback vì lý do nào đó sau bước này, Threat vừa tạo (nếu có)
+        // cũng rollback theo — nhất quán, không còn rủi ro threat mồ côi tham chiếu
+        // tới event không tồn tại.
+        detectionRuleEngine.evaluate(saved);
+
+        return SecurityEventResponse.from(saved);
     }
 
     @Transactional(readOnly = true)
