@@ -21,6 +21,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.quality.Strictness;
 import org.mockito.junit.jupiter.MockitoSettings;
+import com.sentinelx.detection.service.SensitiveAccounts;
+import java.util.Set;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -35,15 +37,20 @@ class SuspiciousLoginDetectorTest {
 
     @Mock
     private SecurityEventRepository eventRepository;
+    @Mock
+    private SensitiveAccounts sensitiveAccounts;
 
     @Mock
     private ThreatRepository threatRepository;
 
     private SuspiciousLoginDetector detector;
 
-    @BeforeEach
+        @BeforeEach
     void setUp() {
-        detector = new SuspiciousLoginDetector(eventRepository, threatRepository);
+        detector = new SuspiciousLoginDetector(eventRepository, threatRepository, sensitiveAccounts);
+        lenient().when(sensitiveAccounts.contains(any())).thenAnswer(inv ->
+                Set.of("admin", "root", "administrator").contains(inv.getArgument(0)));
+
         // Mặc định: IP quen thuộc, không có failed attempt, không có threat trùng lặp.
         // Mỗi test override lại đúng phần cần thiết.
         lenient().when(eventRepository.existsByEventTypeAndSourceIpAndUsernameAndTimestampBefore(

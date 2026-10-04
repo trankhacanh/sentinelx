@@ -11,6 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import com.sentinelx.common.model.Severity;
+import com.sentinelx.detection.service.RiskScoreService;
 
 /**
  * Nhận Event -> Nạp rule đang bật -> Đánh giá từng detector -> Tạo Threat -> Tính Risk.
@@ -23,12 +25,14 @@ public class DetectionRuleEngine {
     private final List<ThreatDetector> detectors;
     private final DetectionRuleRepository ruleRepository;
     private final ThreatRepository threatRepository;
+    private final RiskScoreService riskScoreService;
 
-    public DetectionRuleEngine(List<ThreatDetector> detectors, DetectionRuleRepository ruleRepository,
-                               ThreatRepository threatRepository) {
+     public DetectionRuleEngine(List<ThreatDetector> detectors, DetectionRuleRepository ruleRepository,
+                               ThreatRepository threatRepository, RiskScoreService riskScoreService) {
         this.detectors = detectors;
         this.ruleRepository = ruleRepository;
         this.threatRepository = threatRepository;
+        this.riskScoreService = riskScoreService;
     }
 
     /**
@@ -65,21 +69,25 @@ public class DetectionRuleEngine {
         if (!rule.isEnabled()) {
             return;
         }
-        if (!detector.detect(event)) {
+                if (!detector.detect(event)) {
             return;
         }
+
+        int riskScore = riskScoreService.calculate(rule, event);
+        Severity severity = Severity.fromScore(riskScore);
 
         Threat threat = new Threat(
                 event.getId(),
                 rule,
                 rule.getThreatType(),
-                rule.getSeverity(),
-                rule.getBaseRiskScore(),
+                severity,
+                riskScore,
                 event.getSourceIp(),
-                "Rule '" + rule.getName() + "' triggered by event " + event.getId());
+                "Rule '" + rule.getName() + "' triggered by event " + event.getId()
+                        + " (risk score " + riskScore + ")");
 
         threatRepository.save(threat);
-        log.info("Threat created: type={} sourceIp={} riskScore={} ruleCode={}",
-                threat.getThreatType(), threat.getSourceIp(), threat.getRiskScore(), rule.getRuleCode());
+        log.info("Threat created: type={} sourceIp={} riskScore={} severity={} ruleCode={}",
+                threat.getThreatType(), threat.getSourceIp(), threat.getRiskScore(), severity, rule.getRuleCode());
     }
 }

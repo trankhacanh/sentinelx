@@ -50,4 +50,8 @@ public interface ThreatRepository extends JpaRepository<Threat, UUID>, JpaSpecif
 
         long getCnt();
     }
+
+        /** Frequency component của RiskScoreService: số threat cùng rule, cùng IP, trong khoảng thời gian gần đây. */
+    long countByRule_IdAndSourceIpAndDetectedAtAfter(UUID ruleId, String sourceIp, Instant after);
+    
 }

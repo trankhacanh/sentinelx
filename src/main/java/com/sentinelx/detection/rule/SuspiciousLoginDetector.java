@@ -3,13 +3,13 @@ package com.sentinelx.detection.rule;
 import com.sentinelx.detection.entity.RuleCode;
 import com.sentinelx.detection.entity.ThreatType;
 import com.sentinelx.detection.repository.ThreatRepository;
+import com.sentinelx.detection.service.SensitiveAccounts;
 import com.sentinelx.event.entity.EventType;
 import com.sentinelx.event.entity.SecurityEvent;
 import com.sentinelx.event.repository.SecurityEventRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.Set;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -22,15 +22,17 @@ public class SuspiciousLoginDetector implements ThreatDetector {
     private static final int UNUSUAL_HOUR_END = 5; // [00:00, 05:00) UTC coi là giờ bất thường
     private static final int FAILED_ATTEMPTS_THRESHOLD = 3;
     private static final Duration FAILED_ATTEMPTS_WINDOW = Duration.ofMinutes(5);
-    private static final Set<String> SENSITIVE_USERNAMES = Set.of("admin", "root", "administrator");
     private static final Duration DEDUP_WINDOW = Duration.ofMinutes(5);
 
     private final SecurityEventRepository eventRepository;
     private final ThreatRepository threatRepository;
+    private final SensitiveAccounts sensitiveAccounts;
 
-    public SuspiciousLoginDetector(SecurityEventRepository eventRepository, ThreatRepository threatRepository) {
+    public SuspiciousLoginDetector(SecurityEventRepository eventRepository, ThreatRepository threatRepository,
+                                   SensitiveAccounts sensitiveAccounts) {
         this.eventRepository = eventRepository;
         this.threatRepository = threatRepository;
+        this.sensitiveAccounts = sensitiveAccounts;
     }
 
     @Override
@@ -54,7 +56,7 @@ public class SuspiciousLoginDetector implements ThreatDetector {
         if (hasRecentFailedAttempts(event)) {
             signalCount++;
         }
-        if (SENSITIVE_USERNAMES.contains(event.getUsername())) {
+        if (sensitiveAccounts.contains(event.getUsername())) {
             signalCount++;
         }
 
