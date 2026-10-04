@@ -35,5 +35,13 @@ public interface SecurityEventRepository
             """, nativeQuery = true)
     long countDistinctDestinationPorts(@Param("sourceIp") String sourceIp,
                                        @Param("from") Instant from, @Param("to") Instant to);
-                                       
+
+
+      /** "New IP" cho SuspiciousLoginDetector: IP này đã từng LOGIN_SUCCESS cho username này chưa, TRƯỚC thời điểm given. */
+    boolean existsByEventTypeAndSourceIpAndUsernameAndTimestampBefore(
+            EventType eventType, String sourceIp, String username, Instant before);
+
+    /** "Multiple failed attempts" cho SuspiciousLoginDetector: đếm LOGIN_FAILED của username (không phân biệt IP) trong cửa sổ. */
+    long countByEventTypeAndUsernameAndTimestampBetween(
+            EventType eventType, String username, Instant from, Instant to);                                  
 }
