@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sentinelx.common.exception.BadRequestException;
 import com.sentinelx.common.model.Severity;
+import com.sentinelx.detection.engine.DetectionRuleEngine; // <-- Import DetectionRuleEngine
 import com.sentinelx.event.dto.CreateSecurityEventRequest;
 import com.sentinelx.event.dto.EventFilter;
 import com.sentinelx.event.entity.EventType;
@@ -35,13 +36,20 @@ class SecurityEventServiceTest {
     @Mock
     private SecurityEventRepository repository;
 
+    @Mock
+    private DetectionRuleEngine detectionRuleEngine; // <-- Khai báo mock DetectionRuleEngine
+
     private SecurityEventService service;
 
     @BeforeEach
     void setUp() {
-        service = new SecurityEventService(repository, new ObjectMapper(),
+        service = new SecurityEventService(
+                repository, 
+                new ObjectMapper(),
                 Clock.fixed(NOW, ZoneOffset.UTC),
-                new EventIngestionProperties(Duration.ofMinutes(5), 100));
+                new EventIngestionProperties(Duration.ofMinutes(5), 100),
+                detectionRuleEngine // <-- Truyền thêm tham số này vào constructor
+        );
     }
 
     private CreateSecurityEventRequest request(Instant timestamp, String sourceIp, String username,

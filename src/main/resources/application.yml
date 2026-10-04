@@ -2,6 +2,7 @@ spring:
   application:
     name: sentinelx
 
+
   # Đọc .env ở thư mục chạy app. "optional:" để không lỗi trên CI/production khi dùng biến môi trường thật.
   config:
     import: "optional:file:.env[.properties]"
@@ -57,3 +58,8 @@ sentinelx:
   events:
     max-future-skew: 5m
     max-payload-bytes: 8192
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
