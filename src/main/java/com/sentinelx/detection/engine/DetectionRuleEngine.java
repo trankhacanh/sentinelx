@@ -13,6 +13,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import com.sentinelx.common.model.Severity;
 import com.sentinelx.detection.service.RiskScoreService;
+import com.sentinelx.alert.service.AlertService;
+
 
 /**
  * Nhận Event -> Nạp rule đang bật -> Đánh giá từng detector -> Tạo Threat -> Tính Risk.
@@ -26,13 +28,17 @@ public class DetectionRuleEngine {
     private final DetectionRuleRepository ruleRepository;
     private final ThreatRepository threatRepository;
     private final RiskScoreService riskScoreService;
+    private final AlertService alertService;
 
-     public DetectionRuleEngine(List<ThreatDetector> detectors, DetectionRuleRepository ruleRepository,
-                               ThreatRepository threatRepository, RiskScoreService riskScoreService) {
+
+      public DetectionRuleEngine(List<ThreatDetector> detectors, DetectionRuleRepository ruleRepository,
+                               ThreatRepository threatRepository, RiskScoreService riskScoreService,
+                               AlertService alertService) {
         this.detectors = detectors;
         this.ruleRepository = ruleRepository;
         this.threatRepository = threatRepository;
         this.riskScoreService = riskScoreService;
+        this.alertService = alertService;
     }
 
     /**
@@ -89,5 +95,12 @@ public class DetectionRuleEngine {
         threatRepository.save(threat);
         log.info("Threat created: type={} sourceIp={} riskScore={} severity={} ruleCode={}",
                 threat.getThreatType(), threat.getSourceIp(), threat.getRiskScore(), severity, rule.getRuleCode());
+            
+        Threat savedThreat = threatRepository.save(threat);
+        alertService.createForThreat(savedThreat);
+
+        log.info("Threat created: type={} sourceIp={} riskScore={} severity={} ruleCode={}",
+                savedThreat.getThreatType(), savedThreat.getSourceIp(), savedThreat.getRiskScore(),
+                severity, rule.getRuleCode());
     }
 }
