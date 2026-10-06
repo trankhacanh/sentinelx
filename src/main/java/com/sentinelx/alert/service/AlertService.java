@@ -10,26 +10,24 @@ import com.sentinelx.common.exception.BadRequestException;
 import com.sentinelx.common.exception.ResourceNotFoundException;
 import com.sentinelx.common.response.PageResponse;
 import com.sentinelx.detection.entity.Threat;
-import com.sentinelx.user.entity.RoleName;
-import com.sentinelx.user.entity.User;
-import com.sentinelx.user.repository.UserRepository;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.sentinelx.user.service.AssignmentValidator;
 
 @Service
 public class AlertService {
 
     private static final int MAX_PAGE_SIZE = 100;
 
-    private final AlertRepository alertRepository;
-    private final UserRepository userRepository;
+   private final AlertRepository alertRepository;
+    private final AssignmentValidator assignmentValidator;
 
-    public AlertService(AlertRepository alertRepository, UserRepository userRepository) {
+    public AlertService(AlertRepository alertRepository, AssignmentValidator assignmentValidator) {
         this.alertRepository = alertRepository;
-        this.userRepository = userRepository;
+        this.assignmentValidator = assignmentValidator;
     }
 
     /**
@@ -71,7 +69,7 @@ public class AlertService {
         return AlertResponse.from(alert);
     }
 
-    @Transactional
+        @Transactional
     public AlertResponse assign(UUID id, UUID assigneeId) {
         Alert alert = findOrThrow(id);
 
@@ -80,16 +78,7 @@ public class AlertService {
             return AlertResponse.from(alert);
         }
 
-        User assignee = userRepository.findById(assigneeId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", assigneeId));
-
-        // Giao việc điều tra cho một tài khoản chỉ có quyền xem (VIEWER) là vô nghĩa về nghiệp vụ.
-        boolean canInvestigate = assignee.getRoles().stream()
-                .anyMatch(r -> r.getName() != RoleName.VIEWER);
-        if (!canInvestigate) {
-            throw new BadRequestException("Cannot assign an alert to a user who only has the VIEWER role");
-        }
-
+        assignmentValidator.validateAssignable(assigneeId);
         alert.assignTo(assigneeId);
         return AlertResponse.from(alert);
     }

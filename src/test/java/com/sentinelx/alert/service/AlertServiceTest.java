@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.sentinelx.alert.entity.Alert;
@@ -15,12 +17,9 @@ import com.sentinelx.common.model.Severity;
 import com.sentinelx.detection.entity.DetectionRule;
 import com.sentinelx.detection.entity.Threat;
 import com.sentinelx.detection.entity.ThreatType;
-import com.sentinelx.user.entity.Role;
-import com.sentinelx.user.entity.RoleName;
-import com.sentinelx.user.entity.User;
-import com.sentinelx.user.repository.UserRepository;
+import com.sentinelx.user.service.AssignmentValidator;
 import java.lang.reflect.Field;
-import java.util.Set;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,13 +34,13 @@ class AlertServiceTest {
     private AlertRepository alertRepository;
 
     @Mock
-    private UserRepository userRepository;
+    private AssignmentValidator assignmentValidator;
 
     private AlertService service;
 
     @BeforeEach
     void setUp() {
-        service = new AlertService(alertRepository, userRepository);
+        service = new AlertService(alertRepository, assignmentValidator);
     }
 
     private Threat threat(ThreatType type, String ip) throws Exception {
@@ -59,17 +58,6 @@ class AlertServiceTest {
         return alert;
     }
 
-    private User userWithRole(RoleName roleName) throws Exception {
-        var roleConstructor = Role.class.getDeclaredConstructor();
-        roleConstructor.setAccessible(true);
-        Role role = roleConstructor.newInstance();
-        Field nameField = Role.class.getDeclaredField("name");
-        nameField.setAccessible(true);
-        nameField.set(role, roleName);
-
-        return new User("someone", "someone@example.com", "hash", "Someone", Set.of(role));
-    }
-
     @Test
     void createForThreat_buildsHumanReadableTitle() throws Exception {
         Threat t = threat(ThreatType.BRUTE_FORCE, "10.0.0.1");
@@ -84,7 +72,7 @@ class AlertServiceTest {
     @Test
     void getById_notFound_throws() {
         UUID id = UUID.randomUUID();
-        when(alertRepository.findById(id)).thenReturn(java.util.Optional.empty());
+        when(alertRepository.findById(id)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> service.getById(id));
     }
@@ -92,7 +80,7 @@ class AlertServiceTest {
     @Test
     void assign_toNull_unassigns() throws Exception {
         Alert alert = alertWithId(new Alert(threat(ThreatType.PORT_SCAN, "10.0.0.2"), "title"), UUID.randomUUID());
-        when(alertRepository.findById(alert.getId())).thenReturn(java.util.Optional.of(alert));
+        when(alertRepository.findById(alert.getId())).thenReturn(Optional.of(alert));
 
         var response = service.assign(alert.getId(), null);
 
@@ -100,32 +88,32 @@ class AlertServiceTest {
     }
 
     @Test
-    void assign_toViewerOnlyUser_throwsBadRequest() throws Exception {
+    void assign_delegatesValidationToAssignmentValidator_andPropagatesRejection() throws Exception {
         Alert alert = alertWithId(new Alert(threat(ThreatType.PORT_SCAN, "10.0.0.2"), "title"), UUID.randomUUID());
         UUID viewerId = UUID.randomUUID();
-        when(alertRepository.findById(alert.getId())).thenReturn(java.util.Optional.of(alert));
-        when(userRepository.findById(viewerId)).thenReturn(java.util.Optional.of(userWithRole(RoleName.VIEWER)));
+        when(alertRepository.findById(alert.getId())).thenReturn(Optional.of(alert));
+        doThrow(new BadRequestException("Cannot assign to a user who only has the VIEWER role"))
+                .when(assignmentValidator).validateAssignable(viewerId);
 
         assertThrows(BadRequestException.class, () -> service.assign(alert.getId(), viewerId));
     }
 
     @Test
-    void assign_toSocAnalyst_succeeds() throws Exception {
+    void assign_whenValid_setsAssignee() throws Exception {
         Alert alert = alertWithId(new Alert(threat(ThreatType.PORT_SCAN, "10.0.0.2"), "title"), UUID.randomUUID());
         UUID analystId = UUID.randomUUID();
-        when(alertRepository.findById(alert.getId())).thenReturn(java.util.Optional.of(alert));
-        when(userRepository.findById(analystId))
-                .thenReturn(java.util.Optional.of(userWithRole(RoleName.SOC_ANALYST)));
+        when(alertRepository.findById(alert.getId())).thenReturn(Optional.of(alert));
 
         var response = service.assign(alert.getId(), analystId);
 
+        verify(assignmentValidator).validateAssignable(analystId);
         assertEquals(analystId, response.assignedTo());
     }
 
     @Test
     void updateStatus_changesStatus() throws Exception {
         Alert alert = alertWithId(new Alert(threat(ThreatType.SQL_INJECTION, "10.0.0.3"), "title"), UUID.randomUUID());
-        when(alertRepository.findById(alert.getId())).thenReturn(java.util.Optional.of(alert));
+        when(alertRepository.findById(alert.getId())).thenReturn(Optional.of(alert));
 
         var response = service.updateStatus(alert.getId(), AlertStatus.RESOLVED);
 
