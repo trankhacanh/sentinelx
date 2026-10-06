@@ -10,12 +10,12 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sentinelx.common.exception.BadRequestException;
 import com.sentinelx.common.model.Severity;
-import com.sentinelx.detection.engine.DetectionRuleEngine; // <-- Import DetectionRuleEngine
 import com.sentinelx.event.dto.CreateSecurityEventRequest;
 import com.sentinelx.event.dto.EventFilter;
 import com.sentinelx.event.entity.EventType;
 import com.sentinelx.event.entity.SecurityEvent;
 import com.sentinelx.event.repository.SecurityEventRepository;
+import com.sentinelx.messaging.EventIngestedEvent;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -27,6 +27,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class SecurityEventServiceTest {
@@ -37,19 +38,16 @@ class SecurityEventServiceTest {
     private SecurityEventRepository repository;
 
     @Mock
-    private DetectionRuleEngine detectionRuleEngine; // <-- Khai báo mock DetectionRuleEngine
+    private ApplicationEventPublisher eventPublisher;
 
     private SecurityEventService service;
 
     @BeforeEach
     void setUp() {
-        service = new SecurityEventService(
-                repository, 
-                new ObjectMapper(),
+        service = new SecurityEventService(repository, new ObjectMapper(),
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 new EventIngestionProperties(Duration.ofMinutes(5), 100),
-                detectionRuleEngine // <-- Truyền thêm tham số này vào constructor
-        );
+                eventPublisher);
     }
 
     private CreateSecurityEventRequest request(Instant timestamp, String sourceIp, String username,
@@ -72,6 +70,17 @@ class SecurityEventServiceTest {
     }
 
     @Test
+    void ingest_publishesEventIngestedEvent_afterSaving() {
+        when(repository.save(any(SecurityEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.ingest(request(NOW, "10.0.0.1", null, null));
+
+        ArgumentCaptor<EventIngestedEvent> captor = ArgumentCaptor.forClass(EventIngestedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertEquals(EventIngestedEvent.class, captor.getValue().getClass());
+    }
+
+    @Test
     void ingest_allowsSmallClockSkew() {
         when(repository.save(any(SecurityEvent.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -86,6 +95,7 @@ class SecurityEventServiceTest {
                 () -> service.ingest(request(NOW.plus(Duration.ofMinutes(10)), "10.0.0.1", null, null)));
 
         verify(repository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -96,6 +106,7 @@ class SecurityEventServiceTest {
                 () -> service.ingest(request(NOW, "10.0.0.1", null, huge)));
 
         verify(repository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test

@@ -20,7 +20,20 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
-
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+    listener:
+      simple:
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000
+          multiplier: 2.0
+          max-interval: 5000
+        default-requeue-rejected: false
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -58,6 +71,13 @@ sentinelx:
   events:
     max-future-skew: 5m
     max-payload-bytes: 8192
+
+  messaging:
+    exchange: sentinelx.events
+    dead-letter-exchange: sentinelx.events.dlx
+    routing-key: event.created
+    queue: sentinelx.events.detection
+    dead-letter-queue: sentinelx.events.detection.dlq
 ---
 spring:
   config:

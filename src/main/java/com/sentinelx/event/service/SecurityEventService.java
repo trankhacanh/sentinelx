@@ -12,19 +12,19 @@ import com.sentinelx.event.dto.SecurityEventResponse;
 import com.sentinelx.event.entity.SecurityEvent;
 import com.sentinelx.event.repository.SecurityEventRepository;
 import com.sentinelx.event.repository.SecurityEventSpecifications;
+import com.sentinelx.messaging.EventIngestedEvent;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.sentinelx.detection.engine.DetectionRuleEngine;
-
 
 @Service
 public class SecurityEventService {
@@ -35,19 +35,19 @@ public class SecurityEventService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final EventIngestionProperties properties;
-
-    private final DetectionRuleEngine detectionRuleEngine;
+    private final ApplicationEventPublisher eventPublisher;
 
     public SecurityEventService(SecurityEventRepository repository, ObjectMapper objectMapper,
-                                Clock clock, EventIngestionProperties properties, DetectionRuleEngine detectionRuleEngine) {
+                                Clock clock, EventIngestionProperties properties,
+                                ApplicationEventPublisher eventPublisher) {
         this.repository = repository;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.properties = properties;
-        this.detectionRuleEngine = detectionRuleEngine;
+        this.eventPublisher = eventPublisher;
     }
 
-        @Transactional
+    @Transactional
     public SecurityEventResponse ingest(CreateSecurityEventRequest request) {
         Instant latestAllowed = clock.instant().plus(properties.maxFutureSkew());
         if (request.timestamp().isAfter(latestAllowed)) {
@@ -67,11 +67,11 @@ public class SecurityEventService {
 
         SecurityEvent saved = repository.save(event);
 
-        // evaluate() giờ chạy CÙNG transaction với insert này (xem DetectionRuleEngine).
-        // Nếu transaction rollback vì lý do nào đó sau bước này, Threat vừa tạo (nếu có)
-        // cũng rollback theo — nhất quán, không còn rủi ro threat mồ côi tham chiếu
-        // tới event không tồn tại.
-        detectionRuleEngine.evaluate(saved);
+        // Phase 8: KHÔNG gọi DetectionRuleEngine trực tiếp (đồng bộ) nữa. Thay vào đó phát ra một
+        // Spring application event nội bộ; EventDetectionPublisher (package messaging) lắng nghe
+        // ở pha AFTER_COMMIT và CHỈ KHI ĐÓ mới gửi message vào RabbitMQ. Nếu transaction này
+        // rollback vì bất kỳ lý do gì sau dòng này, message sẽ KHÔNG BAO GIỜ được gửi đi.
+        eventPublisher.publishEvent(new EventIngestedEvent(saved.getId()));
 
         return SecurityEventResponse.from(saved);
     }
@@ -98,7 +98,6 @@ public class SecurityEventService {
     }
 
     private PageResponse<SecurityEventResponse> query(Specification<SecurityEvent> spec, int page, int size) {
-        // Sort cố định và trang tối đa 100: không bao giờ load toàn bộ bảng vào bộ nhớ.
         Pageable pageable = PageRequest.of(
                 Math.max(page, 0),
                 Math.min(Math.max(size, 1), MAX_PAGE_SIZE),
@@ -126,7 +125,6 @@ public class SecurityEventService {
         }
     }
 
-    /** Cùng quy ước với bảng users: username luôn chữ thường. */
     private static String normalizeUsername(String username) {
         return (username == null || username.isBlank()) ? null : username.trim().toLowerCase(Locale.ROOT);
     }

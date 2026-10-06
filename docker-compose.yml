@@ -17,6 +17,20 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
-
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: sentinelx-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "127.0.0.1:${RABBITMQ_PORT:-5678}:5672"
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15678}:15672"   # Management UI, chỉ dùng khi dev
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 volumes:
   sentinelx-pgdata:

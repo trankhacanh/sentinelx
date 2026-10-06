@@ -12,7 +12,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class PortScanDetector implements ThreatDetector {
 
-    // Tham số thuật toán theo đặc tả mục 10 (Rule 2).
     private static final int DISTINCT_PORT_THRESHOLD = 20;
     private static final Duration DETECTION_WINDOW = Duration.ofSeconds(30);
 
@@ -37,23 +36,17 @@ public class PortScanDetector implements ThreatDetector {
 
         Integer currentPort = extractDestinationPort(event);
         if (currentPort == null) {
-            // Không đủ dữ liệu để đánh giá -> bỏ qua an toàn, không ném lỗi (xem quyết định 2c).
             return false;
         }
 
         var windowStart = event.getTimestamp().minus(DETECTION_WINDOW);
 
-        // Event hiện tại CHƯA commit (cùng lý do đã gặp ở BruteForceDetector), nên DB chưa đếm
-        // được nó. Ta đếm các event TRƯỚC đó rồi cộng thêm cổng hiện tại một cách tường minh.
-        // Vì không biết các cổng trước đó có trùng currentPort hay không chỉ từ 1 con số COUNT,
-        // ta chấp nhận ước lượng: nếu count DISTINCT trước đó đã >= ngưỡng, chắc chắn đạt ngưỡng;
-        // nếu đúng bằng ngưỡng - 1, cộng thêm 1 cổng mới (currentPort nhiều khả năng chưa từng
-        // xuất hiện trong một đợt quét tăng dần cổng) để quyết định có kích hoạt hay không.
-        long priorDistinctPorts = eventRepository.countDistinctDestinationPorts(
+        // Từ Phase 8: event hiện tại đã commit thật (xem ghi chú tương tự trong BruteForceDetector)
+        // nên không còn cộng +1 thủ công như Phase 4.
+        long distinctPorts = eventRepository.countDistinctDestinationPorts(
                 event.getSourceIp(), windowStart, event.getTimestamp());
-        long totalDistinctPorts = priorDistinctPorts + 1;
 
-        if (totalDistinctPorts < DISTINCT_PORT_THRESHOLD) {
+        if (distinctPorts < DISTINCT_PORT_THRESHOLD) {
             return false;
         }
 

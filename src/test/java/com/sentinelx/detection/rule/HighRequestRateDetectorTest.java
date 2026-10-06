@@ -57,8 +57,9 @@ class HighRequestRateDetectorTest {
 
     @Test
     void returnsTrue_whenThresholdReachedAndNoExistingThreat() {
+        // Phase 8: không còn +1, mock trả thẳng đúng ngưỡng.
         when(eventRepository.countByEventTypeAndSourceIpAndTimestampBetween(
-                eq(EventType.HTTP_REQUEST), eq(IP), any(), any())).thenReturn(99L);
+                eq(EventType.HTTP_REQUEST), eq(IP), any(), any())).thenReturn(100L);
         when(threatRepository.existsByThreatTypeAndSourceIpAndDetectedAtBetween(
                 eq(ThreatType.HIGH_REQUEST_RATE), eq(IP), any(), any())).thenReturn(false);
 

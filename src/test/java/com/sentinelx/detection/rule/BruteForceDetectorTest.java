@@ -47,20 +47,20 @@ class BruteForceDetectorTest {
         assertFalse(detector.detect(event(EventType.LOGIN_SUCCESS, IP)));
     }
 
-        @Test
+    @Test
     void returnsFalse_whenBelowThreshold() {
-        // 3 event trước đó đã commit + 1 (event hiện tại, chưa commit) = 4 < ngưỡng 5
+        // Phase 8: event đã commit thật khi detection chạy -> mock trả thẳng số lượng thực tế,
+        // không còn trừ 1 như thời detection đồng bộ (Phase 4).
         when(eventRepository.countByEventTypeAndSourceIpAndTimestampBetween(
-                eq(EventType.LOGIN_FAILED), eq(IP), any(), any())).thenReturn(3L);
+                eq(EventType.LOGIN_FAILED), eq(IP), any(), any())).thenReturn(4L);
 
         assertFalse(detector.detect(event(EventType.LOGIN_FAILED, IP)));
     }
 
     @Test
     void returnsTrue_whenThresholdReachedAndNoExistingThreat() {
-        // 4 event trước đó đã commit + 1 (event hiện tại) = 5 = đúng ngưỡng
         when(eventRepository.countByEventTypeAndSourceIpAndTimestampBetween(
-                eq(EventType.LOGIN_FAILED), eq(IP), any(), any())).thenReturn(4L);
+                eq(EventType.LOGIN_FAILED), eq(IP), any(), any())).thenReturn(5L);
         when(threatRepository.existsByThreatTypeAndSourceIpAndDetectedAtBetween(
                 eq(ThreatType.BRUTE_FORCE), eq(IP), any(), any())).thenReturn(false);
 
@@ -85,7 +85,6 @@ class BruteForceDetectorTest {
                 eq(ThreatType.BRUTE_FORCE), eq("10.0.0.1"), any(), any())).thenReturn(false);
 
         assertTrue(detector.detect(event(EventType.LOGIN_FAILED, "10.0.0.1")));
-        // IP khác chưa được stub -> Mockito trả mặc định (0L / false) -> phải là false
         assertFalse(detector.detect(event(EventType.LOGIN_FAILED, IP)));
     }
 }

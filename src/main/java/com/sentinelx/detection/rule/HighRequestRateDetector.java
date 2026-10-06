@@ -9,15 +9,9 @@ import com.sentinelx.event.repository.SecurityEventRepository;
 import java.time.Duration;
 import org.springframework.stereotype.Component;
 
-/**
- * Cấu trúc giống hệt BruteForceDetector (đếm theo eventType + sourceIp + cửa sổ thời gian), chỉ
- * khác eventType theo dõi, ngưỡng và độ dài cửa sổ. Tái sử dụng method repository đã kiểm chứng
- * ở Bước 4.2 thay vì viết query mới, vì phép đếm có cùng bản chất.
- */
 @Component
 public class HighRequestRateDetector implements ThreatDetector {
 
-    // Tham số thuật toán theo đặc tả mục 10 (Rule 5).
     private static final int REQUEST_THRESHOLD = 100;
     private static final Duration DETECTION_WINDOW = Duration.ofSeconds(10);
 
@@ -42,13 +36,11 @@ public class HighRequestRateDetector implements ThreatDetector {
 
         var windowStart = event.getTimestamp().minus(DETECTION_WINDOW);
 
-        // Event hiện tại chưa commit (cùng lý do đã gặp ở BruteForceDetector) nên cộng thêm 1
-        // một cách tường minh thay vì chỉ dựa vào kết quả COUNT từ DB.
-        long priorRequestCount = eventRepository.countByEventTypeAndSourceIpAndTimestampBetween(
+        // Từ Phase 8: event hiện tại đã commit thật, không còn cộng +1 thủ công như Phase 4.
+        long requestCount = eventRepository.countByEventTypeAndSourceIpAndTimestampBetween(
                 EventType.HTTP_REQUEST, event.getSourceIp(), windowStart, event.getTimestamp());
-        long totalRequestCount = priorRequestCount + 1;
 
-        if (totalRequestCount < REQUEST_THRESHOLD) {
+        if (requestCount < REQUEST_THRESHOLD) {
             return false;
         }
 

@@ -12,8 +12,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class BruteForceDetector implements ThreatDetector {
 
-    // Tham số thuật toán cố định theo đặc tả mục 10 (Rule 1). Ngưỡng risk/severity nằm trong DB (DetectionRule),
-    // nhưng "bao nhiêu lần, trong bao lâu" là bản chất thuật toán, không phải cấu hình vận hành nên để ở code.
     private static final int FAILED_LOGIN_THRESHOLD = 5;
     private static final Duration DETECTION_WINDOW = Duration.ofSeconds(60);
 
@@ -30,7 +28,7 @@ public class BruteForceDetector implements ThreatDetector {
         return RuleCode.BRUTE_FORCE_LOGIN;
     }
 
-       @Override
+    @Override
     public boolean detect(SecurityEvent event) {
         if (event.getEventType() != EventType.LOGIN_FAILED) {
             return false;
@@ -38,16 +36,15 @@ public class BruteForceDetector implements ThreatDetector {
 
         var windowStart = event.getTimestamp().minus(DETECTION_WINDOW);
 
-        // QUAN TRỌNG: evaluate() chạy trong transaction REQUIRES_NEW (connection khác), nên tại thời
-        // điểm này, event hiện tại CHƯA được commit bởi transaction ingest() đang tạm dừng. Dưới
-        // isolation level mặc định READ COMMITTED, query COUNT dưới đây sẽ KHÔNG bao giờ đếm được
-        // chính event đang xử lý. Ta cộng thêm 1 một cách tường minh, vì event này chắc chắn thỏa
-        // điều kiện (đã kiểm tra eventType ở trên) nên không cần hỏi lại DB.
-        long priorFailedCount = eventRepository.countByEventTypeAndSourceIpAndTimestampBetween(
+        // Từ Phase 8: DetectionRuleEngine.evaluate() chạy trong consumer RabbitMQ, SAU KHI
+        // transaction ghi event đã commit thật (publish chỉ xảy ra ở AFTER_COMMIT). Event đang
+        // xét vì vậy ĐÃ tồn tại và được mọi transaction khác nhìn thấy -> không cần cộng +1 thủ
+        // công như giai đoạn detection chạy đồng bộ (Phase 4). Nếu sau này detection bị chuyển
+        // lại thành đồng bộ trong cùng transaction ingest, phép +1 phải được khôi phục.
+        long failedCount = eventRepository.countByEventTypeAndSourceIpAndTimestampBetween(
                 EventType.LOGIN_FAILED, event.getSourceIp(), windowStart, event.getTimestamp());
-        long totalFailedCount = priorFailedCount + 1;
 
-        if (totalFailedCount < FAILED_LOGIN_THRESHOLD) {
+        if (failedCount < FAILED_LOGIN_THRESHOLD) {
             return false;
         }
 

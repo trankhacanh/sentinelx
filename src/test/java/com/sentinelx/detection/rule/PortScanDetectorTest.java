@@ -63,7 +63,8 @@ class PortScanDetectorTest {
 
     @Test
     void returnsTrue_whenThresholdReachedAndNoExistingThreat() {
-        when(eventRepository.countDistinctDestinationPorts(eq(IP), any(), any())).thenReturn(19L);
+        // Phase 8: không còn +1, mock trả thẳng đúng ngưỡng.
+        when(eventRepository.countDistinctDestinationPorts(eq(IP), any(), any())).thenReturn(20L);
         when(threatRepository.existsByThreatTypeAndSourceIpAndDetectedAtBetween(
                 eq(ThreatType.PORT_SCAN), eq(IP), any(), any())).thenReturn(false);
 
