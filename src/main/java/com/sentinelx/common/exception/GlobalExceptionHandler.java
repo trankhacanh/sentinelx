@@ -26,6 +26,8 @@ import com.sentinelx.common.exception.BadRequestException;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import com.sentinelx.common.exception.TooManyRequestsException;
+
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -159,6 +161,14 @@ public class GlobalExceptionHandler {
                 .map(fe -> new FieldViolation(fe.getField(), "Invalid value"))
                 .toList();
         return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Invalid request parameters", req, details);
+    }
+        @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ErrorResponse> handleTooManyRequests(TooManyRequestsException ex,
+                                                               HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", String.valueOf(ex.getRetryAfter().toSeconds()))
+                .body(new ErrorResponse(Instant.now(), HttpStatus.TOO_MANY_REQUESTS.value(),
+                        "TOO_MANY_REQUESTS", ex.getMessage(), req.getRequestURI(), null));
     }
     
     @ExceptionHandler(Exception.class)

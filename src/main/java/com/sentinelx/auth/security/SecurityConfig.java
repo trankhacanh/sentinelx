@@ -13,6 +13,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import com.sentinelx.ratelimit.LoginRateLimitFilter;
+
 
 @Configuration
 @EnableWebSecurity
@@ -34,15 +36,16 @@ public class SecurityConfig {
         return configuration.getAuthenticationManager();
     }
 
-    @Bean
+        @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    JwtService jwtService,
                                                    CustomUserDetailsService userDetailsService,
                                                    RestAuthenticationEntryPoint entryPoint,
-                                                   RestAccessDeniedHandler accessDeniedHandler)
+                                                   RestAccessDeniedHandler accessDeniedHandler,
+                                                   LoginRateLimitFilter loginRateLimitFilter)
             throws Exception {
         http
-                .csrf(AbstractHttpConfigurer::disable)          // stateless + Bearer header, không dùng cookie
+                .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
@@ -53,7 +56,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers("/api/health", "/actuator/health").permitAll()
-                        .anyRequest().authenticated())           // deny-by-default
+                        .anyRequest().authenticated())
+                .addFilterBefore(loginRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService, userDetailsService),
                         UsernamePasswordAuthenticationFilter.class);
         return http.build();

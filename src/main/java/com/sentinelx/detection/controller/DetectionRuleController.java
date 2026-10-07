@@ -16,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.cache.annotation.CacheEvict;
+
 
 /** Chỉ đọc ở bước này. CRUD (tạo/sửa/bật-tắt rule) sẽ thêm khi cần, cùng Bước 4.2. */
 @RestController
@@ -38,14 +40,14 @@ public class DetectionRuleController {
      * Chỉ bật/tắt rule ở bước này — đủ để test Detection Engine phản ứng ngay khi rule bị tắt.
      * CRUD đầy đủ (sửa ngưỡng, risk, tạo rule mới) sẽ thêm nếu một phase sau cần tới.
      */
-    @PutMapping("/{id}/enabled")
+        @PutMapping("/{id}/enabled")
     @Transactional
+    @CacheEvict(cacheNames = "detectionRules", key = "#result.data.ruleCode")
     public ApiResponse<DetectionRuleResponse> setEnabled(@PathVariable UUID id,
                                                          @Valid @RequestBody UpdateRuleEnabledRequest request) {
         var rule = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Detection rule", id));
         rule.setEnabled(request.enabled());
-        // Entity đang managed trong transaction -> dirty checking tự UPDATE khi commit, không cần save()
         return ApiResponse.ok("Rule updated", DetectionRuleResponse.from(rule));
     }
     
