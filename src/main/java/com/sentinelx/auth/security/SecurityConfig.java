@@ -14,6 +14,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import com.sentinelx.ratelimit.LoginRateLimitFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import java.util.List;
+
 
 
 @Configuration
@@ -36,15 +41,17 @@ public class SecurityConfig {
         return configuration.getAuthenticationManager();
     }
 
-        @Bean
+           @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    JwtService jwtService,
                                                    CustomUserDetailsService userDetailsService,
                                                    RestAuthenticationEntryPoint entryPoint,
                                                    RestAccessDeniedHandler accessDeniedHandler,
-                                                   LoginRateLimitFilter loginRateLimitFilter)
+                                                   LoginRateLimitFilter loginRateLimitFilter,
+                                                   CorsConfigurationSource corsConfigurationSource)
             throws Exception {
         http
+                .cors(c -> c.configurationSource(corsConfigurationSource))
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .formLogin(AbstractHttpConfigurer::disable)
@@ -62,4 +69,25 @@ public class SecurityConfig {
                         UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
+
+        /**
+     * Frontend (Vite dev server, localhost:5173) và backend (localhost:8080) là hai origin khác
+     * nhau -> trình duyệt chặn request bằng CORS trừ khi backend khai báo rõ origin nào được phép.
+     * Chỉ cho phép origin cụ thể của dev server, KHÔNG dùng "*" (wildcard) vì allowCredentials=true
+     * (cần thiết để gửi header Authorization) không được phép kết hợp với "*" theo chuẩn CORS.
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+
+
 }
