@@ -3,7 +3,8 @@ import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppLayout from './layout/AppLayout';
 import LoginPage from './pages/LoginPage';
-import DashboardPlaceholder from './pages/DashboardPlaceholder';
+import DashboardPage from './pages/DashboardPage';
+
 
 export default function App() {
   return (
@@ -14,7 +15,7 @@ export default function App() {
 
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
-              <Route path="/dashboard" element={<DashboardPlaceholder />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
               {/* Các route còn lại (/events, /threats, /alerts, /incidents, /detection-rules)
                   sẽ thêm lần lượt ở các bước 10.2 - 10.6 */}
             </Route>
