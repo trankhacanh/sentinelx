@@ -67,6 +67,8 @@ management:
       show-details: never
 
 sentinelx:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   security:
     jwt:
       secret: ${JWT_SECRET}          # không có default: thiếu là app không khởi động

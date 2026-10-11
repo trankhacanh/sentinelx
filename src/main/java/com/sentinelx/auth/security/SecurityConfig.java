@@ -18,7 +18,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
-
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 
 
 @Configuration
@@ -52,6 +53,12 @@ public class SecurityConfig {
             throws Exception {
         http
                 .cors(c -> c.configurationSource(corsConfigurationSource))
+                .headers(headers -> headers
+                        .contentTypeOptions(withDefaults -> {})
+                        .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(31536000)))
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .formLogin(AbstractHttpConfigurer::disable)
@@ -76,10 +83,12 @@ public class SecurityConfig {
      * Chỉ cho phép origin cụ thể của dev server, KHÔNG dùng "*" (wildcard) vì allowCredentials=true
      * (cần thiết để gửi header Authorization) không được phép kết hợp với "*" theo chuẩn CORS.
      */
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+       @Bean
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${sentinelx.cors.allowed-origins}") String allowedOrigins) {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
+        // Hỗ trợ nhiều origin cách nhau dấu phẩy trong .env, ví dụ khi có cả domain staging/production.
+        configuration.setAllowedOrigins(List.of(allowedOrigins.split(",")));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         configuration.setAllowCredentials(true);
