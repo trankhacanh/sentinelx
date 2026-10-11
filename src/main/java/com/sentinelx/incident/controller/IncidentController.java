@@ -30,7 +30,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** GET mở cho cả 4 role (VIEWER có quyền "View incidents"). Mọi thao tác ghi override chặt hơn. */
 @RestController
 @RequestMapping("/api/incidents")
 @PreAuthorize("hasAnyRole('ADMIN', 'SOC_ANALYST', 'SECURITY_ENGINEER', 'VIEWER')")
@@ -47,9 +46,10 @@ public class IncidentController {
     @PostMapping
     @PreAuthorize(CAN_WRITE)
     public ResponseEntity<ApiResponse<IncidentDetailResponse>> create(
-            @Valid @RequestBody CreateIncidentRequest request) {
+            @Valid @RequestBody CreateIncidentRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok("Incident created", service.create(request)));
+                .body(ApiResponse.ok("Incident created", service.create(request, principal.getId())));
     }
 
     @GetMapping
@@ -75,15 +75,19 @@ public class IncidentController {
     @PutMapping("/{id}/status")
     @PreAuthorize(CAN_WRITE)
     public ApiResponse<IncidentDetailResponse> updateStatus(@PathVariable UUID id,
-                                                            @Valid @RequestBody UpdateIncidentStatusRequest request) {
-        return ApiResponse.ok("Incident status updated", service.updateStatus(id, request.status()));
+                                                            @Valid @RequestBody UpdateIncidentStatusRequest request,
+                                                            @AuthenticationPrincipal UserPrincipal principal) {
+        return ApiResponse.ok("Incident status updated",
+                service.updateStatus(id, request.status(), principal.getId()));
     }
 
     @PutMapping("/{id}/assign")
     @PreAuthorize(CAN_WRITE)
     public ApiResponse<IncidentDetailResponse> assign(@PathVariable UUID id,
-                                                       @Valid @RequestBody AssignIncidentRequest request) {
-        return ApiResponse.ok("Incident assigned", service.assign(id, request.assignedTo()));
+                                                       @Valid @RequestBody AssignIncidentRequest request,
+                                                       @AuthenticationPrincipal UserPrincipal principal) {
+        return ApiResponse.ok("Incident assigned",
+                service.assign(id, request.assignedTo(), principal.getId()));
     }
 
     @PostMapping("/{id}/alerts")

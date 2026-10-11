@@ -6,34 +6,34 @@ import com.sentinelx.alert.entity.Alert;
 import com.sentinelx.alert.entity.AlertStatus;
 import com.sentinelx.alert.repository.AlertRepository;
 import com.sentinelx.alert.repository.AlertSpecifications;
-import com.sentinelx.common.exception.BadRequestException;
-import com.sentinelx.common.exception.ResourceNotFoundException;
+import com.sentinelx.audit.entity.AuditAction;
+import com.sentinelx.audit.service.AuditLogService;
 import com.sentinelx.common.response.PageResponse;
 import com.sentinelx.detection.entity.Threat;
+import com.sentinelx.user.service.AssignmentValidator;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.sentinelx.user.service.AssignmentValidator;
 
 @Service
 public class AlertService {
 
     private static final int MAX_PAGE_SIZE = 100;
 
-   private final AlertRepository alertRepository;
+    private final AlertRepository alertRepository;
     private final AssignmentValidator assignmentValidator;
+    private final AuditLogService auditLogService;
 
-    public AlertService(AlertRepository alertRepository, AssignmentValidator assignmentValidator) {
+    public AlertService(AlertRepository alertRepository, AssignmentValidator assignmentValidator,
+                        AuditLogService auditLogService) {
         this.alertRepository = alertRepository;
         this.assignmentValidator = assignmentValidator;
+        this.auditLogService = auditLogService;
     }
 
-    /**
-     * Gọi từ DetectionRuleEngine, CÙNG transaction với việc lưu Threat (xem quyết định kiến trúc
-     * 2a) — không dùng REQUIRES_NEW, tránh lặp lại lỗi FK-chưa-commit đã sửa ở Phase 4.
-     */
     @Transactional
     public Alert createForThreat(Threat threat) {
         Alert alert = new Alert(threat, buildTitle(threat));
@@ -63,29 +63,36 @@ public class AlertService {
     }
 
     @Transactional
-    public AlertResponse updateStatus(UUID id, AlertStatus status) {
+    public AlertResponse updateStatus(UUID id, AlertStatus status, UUID actorId) {
         Alert alert = findOrThrow(id);
         alert.updateStatus(status);
+
+        auditLogService.record(actorId, AuditAction.ALERT_UPDATED, "Alert", id, null,
+                Map.of("newStatus", status.name()));
+
         return AlertResponse.from(alert);
     }
 
-        @Transactional
-    public AlertResponse assign(UUID id, UUID assigneeId) {
+    @Transactional
+    public AlertResponse assign(UUID id, UUID assigneeId, UUID actorId) {
         Alert alert = findOrThrow(id);
 
         if (assigneeId == null) {
             alert.assignTo(null);
-            return AlertResponse.from(alert);
+        } else {
+            assignmentValidator.validateAssignable(assigneeId);
+            alert.assignTo(assigneeId);
         }
 
-        assignmentValidator.validateAssignable(assigneeId);
-        alert.assignTo(assigneeId);
+        auditLogService.record(actorId, AuditAction.ALERT_ASSIGNED, "Alert", id, null,
+                Map.of("assignedTo", assigneeId == null ? "null" : assigneeId.toString()));
+
         return AlertResponse.from(alert);
     }
 
     private Alert findOrThrow(UUID id) {
         return alertRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Alert", id));
+                .orElseThrow(() -> new com.sentinelx.common.exception.ResourceNotFoundException("Alert", id));
     }
 
     private String buildTitle(Threat threat) {

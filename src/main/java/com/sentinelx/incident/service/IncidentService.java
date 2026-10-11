@@ -2,6 +2,8 @@ package com.sentinelx.incident.service;
 
 import com.sentinelx.alert.entity.Alert;
 import com.sentinelx.alert.repository.AlertRepository;
+import com.sentinelx.audit.entity.AuditAction;
+import com.sentinelx.audit.service.AuditLogService;
 import com.sentinelx.common.exception.ResourceNotFoundException;
 import com.sentinelx.common.response.PageResponse;
 import com.sentinelx.incident.dto.CreateIncidentRequest;
@@ -17,6 +19,7 @@ import com.sentinelx.incident.repository.IncidentRepository;
 import com.sentinelx.incident.repository.IncidentSpecifications;
 import com.sentinelx.user.service.AssignmentValidator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -32,25 +35,29 @@ public class IncidentService {
     private final IncidentNoteRepository noteRepository;
     private final AlertRepository alertRepository;
     private final AssignmentValidator assignmentValidator;
+    private final AuditLogService auditLogService;
 
     public IncidentService(IncidentRepository incidentRepository, IncidentNoteRepository noteRepository,
-                           AlertRepository alertRepository, AssignmentValidator assignmentValidator) {
+                           AlertRepository alertRepository, AssignmentValidator assignmentValidator,
+                           AuditLogService auditLogService) {
         this.incidentRepository = incidentRepository;
         this.noteRepository = noteRepository;
         this.alertRepository = alertRepository;
         this.assignmentValidator = assignmentValidator;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional
-    public IncidentDetailResponse create(CreateIncidentRequest request) {
+    public IncidentDetailResponse create(CreateIncidentRequest request, UUID actorId) {
         Incident incident = new Incident(request.title(), request.description(), request.severity());
         for (UUID alertId : request.alertIdsOrEmpty()) {
             incident.linkAlert(findAlertOrThrow(alertId));
         }
-         // saveAndFlush (thay vì save) buộc Hibernate thực thi INSERT ngay và đồng bộ lại các giá
-        // trị do DB/Hibernate tự sinh (created_at, updated_at qua @CreationTimestamp/@UpdateTimestamp)
-        // vào object Java trước khi ta đọc chúng để build response.
         Incident saved = incidentRepository.saveAndFlush(incident);
+
+        auditLogService.record(actorId, AuditAction.INCIDENT_CREATED, "Incident", saved.getId(), null,
+                Map.of("title", request.title()));
+
         return IncidentDetailResponse.from(saved, List.of());
     }
 
@@ -81,14 +88,18 @@ public class IncidentService {
     }
 
     @Transactional
-    public IncidentDetailResponse updateStatus(UUID id, IncidentStatus status) {
+    public IncidentDetailResponse updateStatus(UUID id, IncidentStatus status, UUID actorId) {
         Incident incident = findOrThrow(id);
         incident.updateStatus(status);
+
+        auditLogService.record(actorId, AuditAction.INCIDENT_STATUS_CHANGED, "Incident", id, null,
+                Map.of("newStatus", status.name()));
+
         return getById(id);
     }
 
     @Transactional
-    public IncidentDetailResponse assign(UUID id, UUID assigneeId) {
+    public IncidentDetailResponse assign(UUID id, UUID assigneeId, UUID actorId) {
         Incident incident = findOrThrow(id);
         if (assigneeId == null) {
             incident.assignTo(null);
@@ -96,6 +107,10 @@ public class IncidentService {
             assignmentValidator.validateAssignable(assigneeId);
             incident.assignTo(assigneeId);
         }
+
+        auditLogService.record(actorId, AuditAction.INCIDENT_ASSIGNED, "Incident", id, null,
+                Map.of("assignedTo", assigneeId == null ? "null" : assigneeId.toString()));
+
         return getById(id);
     }
 

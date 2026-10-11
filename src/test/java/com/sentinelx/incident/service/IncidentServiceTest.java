@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.sentinelx.alert.entity.Alert;
 import com.sentinelx.alert.repository.AlertRepository;
+import com.sentinelx.audit.service.AuditLogService;
 import com.sentinelx.common.exception.ResourceNotFoundException;
 import com.sentinelx.common.model.Severity;
 import com.sentinelx.detection.entity.DetectionRule;
@@ -36,6 +37,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class IncidentServiceTest {
 
+    private static final UUID ACTOR_ID = UUID.randomUUID();
+
     @Mock
     private IncidentRepository incidentRepository;
 
@@ -48,11 +51,15 @@ class IncidentServiceTest {
     @Mock
     private AssignmentValidator assignmentValidator;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     private IncidentService service;
 
     @BeforeEach
     void setUp() {
-        service = new IncidentService(incidentRepository, noteRepository, alertRepository, assignmentValidator);
+        service = new IncidentService(incidentRepository, noteRepository, alertRepository,
+                assignmentValidator, auditLogService);
     }
 
     private Incident incidentWithId(Incident incident, UUID id) throws Exception {
@@ -80,20 +87,20 @@ class IncidentServiceTest {
     void create_withoutAlerts_startsAsOpen() {
         when(incidentRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        var response = service.create(new CreateIncidentRequest("Title", "Desc", Severity.HIGH, null));
+        var response = service.create(new CreateIncidentRequest("Title", "Desc", Severity.HIGH, null), ACTOR_ID);
 
         assertEquals(IncidentStatus.OPEN, response.status());
         assertTrue(response.alerts().isEmpty());
     }
 
-           @Test
+    @Test
     void create_withAlertIds_linksThem() throws Exception {
         UUID alertId = UUID.randomUUID();
         when(alertRepository.findById(alertId)).thenReturn(Optional.of(alert(alertId)));
         when(incidentRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var response = service.create(
-                new CreateIncidentRequest("Title", "Desc", Severity.HIGH, Set.of(alertId)));
+                new CreateIncidentRequest("Title", "Desc", Severity.HIGH, Set.of(alertId)), ACTOR_ID);
 
         assertEquals(1, response.alerts().size());
     }
@@ -104,7 +111,7 @@ class IncidentServiceTest {
         when(alertRepository.findById(alertId)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> service.create(
-                new CreateIncidentRequest("Title", "Desc", Severity.HIGH, Set.of(alertId))));
+                new CreateIncidentRequest("Title", "Desc", Severity.HIGH, Set.of(alertId)), ACTOR_ID));
     }
 
     @Test
@@ -113,7 +120,7 @@ class IncidentServiceTest {
         when(incidentRepository.findById(incident.getId())).thenReturn(Optional.of(incident));
         when(noteRepository.findByIncident_IdOrderByCreatedAtAsc(incident.getId())).thenReturn(List.of());
 
-        var response = service.updateStatus(incident.getId(), IncidentStatus.RESOLVED);
+        var response = service.updateStatus(incident.getId(), IncidentStatus.RESOLVED, ACTOR_ID);
 
         assertEquals(IncidentStatus.RESOLVED, response.status());
         assertNotNull(response.resolvedAt());
@@ -125,7 +132,7 @@ class IncidentServiceTest {
         when(incidentRepository.findById(incident.getId())).thenReturn(Optional.of(incident));
         when(noteRepository.findByIncident_IdOrderByCreatedAtAsc(incident.getId())).thenReturn(List.of());
 
-        var response = service.updateStatus(incident.getId(), IncidentStatus.INVESTIGATING);
+        var response = service.updateStatus(incident.getId(), IncidentStatus.INVESTIGATING, ACTOR_ID);
 
         assertNull(response.resolvedAt());
     }
@@ -137,7 +144,7 @@ class IncidentServiceTest {
         when(incidentRepository.findById(incident.getId())).thenReturn(Optional.of(incident));
         when(noteRepository.findByIncident_IdOrderByCreatedAtAsc(incident.getId())).thenReturn(List.of());
 
-        var response = service.assign(incident.getId(), analystId);
+        var response = service.assign(incident.getId(), analystId, ACTOR_ID);
 
         verify(assignmentValidator).validateAssignable(analystId);
         assertEquals(analystId, response.assignedTo());

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.sentinelx.alert.entity.Alert;
 import com.sentinelx.alert.entity.AlertStatus;
 import com.sentinelx.alert.repository.AlertRepository;
+import com.sentinelx.audit.service.AuditLogService;
 import com.sentinelx.common.exception.BadRequestException;
 import com.sentinelx.common.exception.ResourceNotFoundException;
 import com.sentinelx.common.model.Severity;
@@ -30,17 +31,22 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class AlertServiceTest {
 
+    private static final UUID ACTOR_ID = UUID.randomUUID();
+
     @Mock
     private AlertRepository alertRepository;
 
     @Mock
     private AssignmentValidator assignmentValidator;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     private AlertService service;
 
     @BeforeEach
     void setUp() {
-        service = new AlertService(alertRepository, assignmentValidator);
+        service = new AlertService(alertRepository, assignmentValidator, auditLogService);
     }
 
     private Threat threat(ThreatType type, String ip) throws Exception {
@@ -82,7 +88,7 @@ class AlertServiceTest {
         Alert alert = alertWithId(new Alert(threat(ThreatType.PORT_SCAN, "10.0.0.2"), "title"), UUID.randomUUID());
         when(alertRepository.findById(alert.getId())).thenReturn(Optional.of(alert));
 
-        var response = service.assign(alert.getId(), null);
+        var response = service.assign(alert.getId(), null, ACTOR_ID);
 
         assertNull(response.assignedTo());
     }
@@ -95,7 +101,7 @@ class AlertServiceTest {
         doThrow(new BadRequestException("Cannot assign to a user who only has the VIEWER role"))
                 .when(assignmentValidator).validateAssignable(viewerId);
 
-        assertThrows(BadRequestException.class, () -> service.assign(alert.getId(), viewerId));
+        assertThrows(BadRequestException.class, () -> service.assign(alert.getId(), viewerId, ACTOR_ID));
     }
 
     @Test
@@ -104,7 +110,7 @@ class AlertServiceTest {
         UUID analystId = UUID.randomUUID();
         when(alertRepository.findById(alert.getId())).thenReturn(Optional.of(alert));
 
-        var response = service.assign(alert.getId(), analystId);
+        var response = service.assign(alert.getId(), analystId, ACTOR_ID);
 
         verify(assignmentValidator).validateAssignable(analystId);
         assertEquals(analystId, response.assignedTo());
@@ -115,7 +121,7 @@ class AlertServiceTest {
         Alert alert = alertWithId(new Alert(threat(ThreatType.SQL_INJECTION, "10.0.0.3"), "title"), UUID.randomUUID());
         when(alertRepository.findById(alert.getId())).thenReturn(Optional.of(alert));
 
-        var response = service.updateStatus(alert.getId(), AlertStatus.RESOLVED);
+        var response = service.updateStatus(alert.getId(), AlertStatus.RESOLVED, ACTOR_ID);
 
         assertEquals(AlertStatus.RESOLVED, response.status());
     }

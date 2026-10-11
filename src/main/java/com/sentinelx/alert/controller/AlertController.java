@@ -6,11 +6,13 @@ import com.sentinelx.alert.dto.AssignAlertRequest;
 import com.sentinelx.alert.dto.UpdateAlertStatusRequest;
 import com.sentinelx.alert.dto.UpdateAlertTitleRequest;
 import com.sentinelx.alert.service.AlertService;
+import com.sentinelx.auth.security.UserPrincipal;
 import com.sentinelx.common.response.ApiResponse;
 import com.sentinelx.common.response.PageResponse;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,12 +22,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * RBAC khác Threat (xem quyết định 2e): VIEWER được XEM alert (đặc tả liệt kê "View alerts" cho
- * VIEWER), nhưng không được sửa. Class-level permitAll-4-role chỉ áp dụng cho GET; các PUT override
- * bằng @PreAuthorize method-level chặt hơn (Spring Security: method-level thay thế hoàn toàn
- * class-level, không cộng dồn).
- */
 @RestController
 @RequestMapping("/api/alerts")
 @PreAuthorize("hasAnyRole('ADMIN', 'SOC_ANALYST', 'SECURITY_ENGINEER', 'VIEWER')")
@@ -62,14 +58,18 @@ public class AlertController {
     @PutMapping("/{id}/status")
     @PreAuthorize(CAN_WRITE)
     public ApiResponse<AlertResponse> updateStatus(@PathVariable UUID id,
-                                                   @Valid @RequestBody UpdateAlertStatusRequest request) {
-        return ApiResponse.ok("Alert status updated", service.updateStatus(id, request.status()));
+                                                   @Valid @RequestBody UpdateAlertStatusRequest request,
+                                                   @AuthenticationPrincipal UserPrincipal principal) {
+        return ApiResponse.ok("Alert status updated",
+                service.updateStatus(id, request.status(), principal.getId()));
     }
 
     @PutMapping("/{id}/assign")
     @PreAuthorize(CAN_WRITE)
     public ApiResponse<AlertResponse> assign(@PathVariable UUID id,
-                                             @Valid @RequestBody AssignAlertRequest request) {
-        return ApiResponse.ok("Alert assigned", service.assign(id, request.assignedTo()));
+                                             @Valid @RequestBody AssignAlertRequest request,
+                                             @AuthenticationPrincipal UserPrincipal principal) {
+        return ApiResponse.ok("Alert assigned",
+                service.assign(id, request.assignedTo(), principal.getId()));
     }
 }

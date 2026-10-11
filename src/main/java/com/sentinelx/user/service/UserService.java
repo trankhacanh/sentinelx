@@ -23,18 +23,18 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class UserService {
-
-    private static final int MAX_PAGE_SIZE = 100;
-
+     private static final int MAX_PAGE_SIZE = 100;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final com.sentinelx.audit.service.AuditLogService auditLogService;
 
     public UserService(UserRepository userRepository, RoleRepository roleRepository,
-                       PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder, com.sentinelx.audit.service.AuditLogService auditLogService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional
@@ -84,13 +84,17 @@ public class UserService {
         return PageResponse.from(userRepository.findAll(pageable).map(UserResponse::from));
     }
 
-    @Transactional
+        @Transactional
     public UserResponse assignRoles(UUID actorId, UUID targetId, Set<RoleName> roleNames) {
         if (actorId.equals(targetId)) {
             throw new ConflictException("You cannot change your own roles");
         }
         User target = findOrThrow(targetId);
         target.replaceRoles(resolveRoles(roleNames));
+
+                auditLogService.record(actorId, com.sentinelx.audit.entity.AuditAction.USER_ROLE_CHANGED, "User", targetId, null,
+                java.util.Map.of("newRoles", roleNames.toString()));
+
         return UserResponse.from(target);
     }
 
