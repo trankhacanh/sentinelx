@@ -6,7 +6,10 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import EventsPage from './pages/EventsPage';
 import ThreatsPage from './pages/ThreatsPage';
-
+import AlertsPage from './pages/AlertsPage';
+import IncidentsPage from './pages/IncidentsPage';
+import IncidentDetailPage from './pages/IncidentDetailPage';
+import DetectionRulesPage from './pages/DetectionRulesPage';
 
 export default function App() {
   return (
@@ -20,7 +23,12 @@ export default function App() {
             <Route path="/dashboard" element={<DashboardPage />}/>
             <Route path="/events" element={<EventsPage />}/>
             <Route path="/threats" element={<ThreatsPage />}/>
+            <Route path="/alerts" element={<AlertsPage />} />
+            <Route path="/incidents" element={<IncidentsPage />} />
+            <Route path="/incidents/:id" element={<IncidentDetailPage />} />
+            <Route path="/detection-rules" element={<DetectionRulesPage />} />
 
+            
             </Route>
           </Route>
 
