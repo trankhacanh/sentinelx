@@ -28,6 +28,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @ExtendWith(MockitoExtension.class)
 class SecurityEventServiceTest {
@@ -44,10 +46,10 @@ class SecurityEventServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new SecurityEventService(repository, new ObjectMapper(),
+                service = new SecurityEventService(repository, new ObjectMapper(),
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 new EventIngestionProperties(Duration.ofMinutes(5), 100),
-                eventPublisher);
+                eventPublisher, new SimpleMeterRegistry()); 
     }
 
     private CreateSecurityEventRequest request(Instant timestamp, String sourceIp, String username,

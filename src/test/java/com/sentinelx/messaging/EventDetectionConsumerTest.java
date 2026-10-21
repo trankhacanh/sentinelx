@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @ExtendWith(MockitoExtension.class)
 class EventDetectionConsumerTest {
@@ -33,14 +35,30 @@ class EventDetectionConsumerTest {
 
     @BeforeEach
     void setUp() {
-        consumer = new EventDetectionConsumer(eventRepository, detectionRuleEngine);
+        consumer = new EventDetectionConsumer(
+                eventRepository,
+                detectionRuleEngine,
+                new SimpleMeterRegistry());
     }
 
     @Test
     void onMessage_eventExists_callsDetectionEngine() {
         UUID eventId = UUID.randomUUID();
-        SecurityEvent event = new SecurityEvent(Instant.parse("2026-10-06T00:00:00Z"), EventType.LOGIN_FAILED,
-                "AUTH_SERVICE", "10.0.0.1", null, "admin", Severity.MEDIUM, null);
+        SecurityEvent event = new SecurityEvent(
+                Instant.parse("2026-10-06T00:00:00Z"),
+                EventType.LOGIN_FAILED,
+                "AUTH_SERVICE",
+                "10.0.0.1",
+                null,
+                "admin",
+                Severity.MEDIUM,
+                null);
+
+        ReflectionTestUtils.setField(
+                event,
+                "createdAt",
+                Instant.parse("2026-10-06T00:00:01Z"));
+
         when(eventRepository.findById(eventId)).thenReturn(Optional.of(event));
 
         consumer.onMessage(new EventDetectionMessage(eventId));

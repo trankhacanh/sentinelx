@@ -25,6 +25,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @Service
 public class SecurityEventService {
@@ -35,16 +36,18 @@ public class SecurityEventService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final EventIngestionProperties properties;
-    private final ApplicationEventPublisher eventPublisher;
+        private final ApplicationEventPublisher eventPublisher;
+    private final MeterRegistry meterRegistry;
 
     public SecurityEventService(SecurityEventRepository repository, ObjectMapper objectMapper,
                                 Clock clock, EventIngestionProperties properties,
-                                ApplicationEventPublisher eventPublisher) {
+                                ApplicationEventPublisher eventPublisher, MeterRegistry meterRegistry) {
         this.repository = repository;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.properties = properties;
         this.eventPublisher = eventPublisher;
+        this.meterRegistry = meterRegistry;
     }
 
     @Transactional
@@ -72,7 +75,7 @@ public class SecurityEventService {
         // ở pha AFTER_COMMIT và CHỈ KHI ĐÓ mới gửi message vào RabbitMQ. Nếu transaction này
         // rollback vì bất kỳ lý do gì sau dòng này, message sẽ KHÔNG BAO GIỜ được gửi đi.
         eventPublisher.publishEvent(new EventIngestedEvent(saved.getId()));
-
+          meterRegistry.counter("sentinelx.events.ingested", "eventType", saved.getEventType().name()).increment();
         return SecurityEventResponse.from(saved);
     }
 

@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.sentinelx.common.model.Severity;
 import com.sentinelx.detection.service.RiskScoreService;
 import com.sentinelx.alert.service.AlertService;
-
+import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * Nhận Event -> Nạp rule đang bật -> Đánh giá từng detector -> Tạo Threat -> Tính Risk.
@@ -27,18 +27,19 @@ public class DetectionRuleEngine {
     private final List<ThreatDetector> detectors;
     private final DetectionRuleRepository ruleRepository;
     private final ThreatRepository threatRepository;
-    private final RiskScoreService riskScoreService;
+        private final RiskScoreService riskScoreService;
     private final AlertService alertService;
+    private final MeterRegistry meterRegistry;
 
-
-      public DetectionRuleEngine(List<ThreatDetector> detectors, DetectionRuleRepository ruleRepository,
+    public DetectionRuleEngine(List<ThreatDetector> detectors, DetectionRuleRepository ruleRepository,
                                ThreatRepository threatRepository, RiskScoreService riskScoreService,
-                               AlertService alertService) {
+                               AlertService alertService, MeterRegistry meterRegistry) {
         this.detectors = detectors;
         this.ruleRepository = ruleRepository;
         this.threatRepository = threatRepository;
         this.riskScoreService = riskScoreService;
         this.alertService = alertService;
+        this.meterRegistry = meterRegistry;
     }
 
     /**
@@ -96,8 +97,10 @@ public class DetectionRuleEngine {
         log.info("Threat created: type={} sourceIp={} riskScore={} severity={} ruleCode={}",
                 threat.getThreatType(), threat.getSourceIp(), threat.getRiskScore(), severity, rule.getRuleCode());
             
-        Threat savedThreat = threatRepository.save(threat);
+                Threat savedThreat = threatRepository.save(threat);
         alertService.createForThreat(savedThreat);
+
+        meterRegistry.counter("sentinelx.threats.created", "ruleCode", rule.getRuleCode().name()).increment();
 
         log.info("Threat created: type={} sourceIp={} riskScore={} severity={} ruleCode={}",
                 savedThreat.getThreatType(), savedThreat.getSourceIp(), savedThreat.getRiskScore(),
