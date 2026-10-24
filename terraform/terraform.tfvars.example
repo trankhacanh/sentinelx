@@ -1,0 +1,7 @@
+aws_region   = "ap-southeast-1"
+project_name = "sentinelx"
+environment  = "production"
+
+# Điền sau khi đã đẩy image lên ECR (xem terraform/README.md)
+backend_image  = "<account-id>.dkr.ecr.ap-southeast-1.amazonaws.com/sentinelx/backend:latest"
+frontend_image = "<account-id>.dkr.ecr.ap-southeast-1.amazonaws.com/sentinelx/frontend:latest"
